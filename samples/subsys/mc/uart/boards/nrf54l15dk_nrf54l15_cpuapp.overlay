@@ -1,0 +1,10 @@
+/* Use UART30 for the protocol loopback; UART20 remains the console. */
+/ {
+	aliases {
+		mc-uart = &uart30;
+	};
+};
+
+&uart30 {
+	status = "okay";
+};

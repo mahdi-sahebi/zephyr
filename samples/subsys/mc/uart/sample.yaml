@@ -1,0 +1,8 @@
+sample:
+  name: Micro Core UART loopback
+  description: Polling UART loopback for mc_comm and mc_msg
+tests:
+  sample.mc.uart:
+    build_only: true
+    platform_allow:
+      - nrf54l15dk/nrf54l15/cpuapp

@@ -1,0 +1,12 @@
+sample:
+  name: Micro Core loopback
+  description: In-memory loopback for mc_comm and mc_msg
+tests:
+  sample.mc.loopback:
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "MC loopback: PASS"
+    platform_allow:
+      - native_sim/native/64
