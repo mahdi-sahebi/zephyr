@@ -1,0 +1,8 @@
+sample:
+  name: MC nRF54L15 DK API test
+  description: In-memory test of mc_comm and mc_msg on the nRF54L15 DK
+tests:
+  sample.mc.nrf54l15dk_test:
+    build_only: true
+    platform_allow:
+      - nrf54l15dk/nrf54l15/cpuapp
