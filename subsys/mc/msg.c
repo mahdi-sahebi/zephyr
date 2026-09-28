@@ -41,7 +41,7 @@ size_t mc_msg_required_size(const struct mc_msg_config *config)
 	}
 	return align_up(sizeof(struct mc_msg)) +
 		align_up(mc_comm_required_size(&config->comm)) +
-		align_up(config->message_capacity) +
+		align_up(config->message_capacity + 4U) +
 		config->subscription_capacity * sizeof(struct mc_subscription);
 }
 
@@ -66,7 +66,7 @@ int mc_msg_init(struct mc_msg **instance, void *storage, size_t storage_size,
 	}
 	cursor += align_up(comm_size);
 	msg->message = cursor;
-	cursor += align_up(config->message_capacity);
+	cursor += align_up(config->message_capacity + 4U);
 	msg->subscriptions = (struct mc_subscription *)cursor;
 	msg->subscription_count = 0U;
 	memset(msg->subscriptions, 0,
@@ -91,7 +91,7 @@ int mc_msg_update(struct mc_msg *instance)
 	}
 	size_t length = 0U;
 	err = mc_comm_receive(instance->comm, instance->message,
-		instance->config.message_capacity, &length, 0U);
+		instance->config.message_capacity + 4U, &length, 0U);
 	if (err == -ETIMEDOUT) {
 		return 0;
 	}
