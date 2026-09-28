@@ -1,0 +1,6 @@
+tests:
+  mc.msg:
+    tags:
+      - mc
+    platform_allow:
+      - native_sim/native/64
