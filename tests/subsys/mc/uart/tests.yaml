@@ -1,0 +1,7 @@
+tests:
+  mc.uart:
+    tags:
+      - mc
+      - uart
+    platform_allow:
+      - nrf54l15dk/nrf54l15/cpuapp

@@ -26,6 +26,7 @@ struct mc_comm {
 	uint8_t *rx;
 	size_t frame_size;
 	size_t rx_length;
+	bool rx_pending;
 	uint8_t tx_sequence;
 	uint8_t rx_sequence;
 	uint8_t retry_limit;
@@ -90,6 +91,7 @@ int mc_comm_init(struct mc_comm **instance, void *storage, size_t storage_size,
 	comm->tx = (uint8_t *)storage + align_up(sizeof(*comm));
 	comm->rx = comm->tx + align_up(config->frame_size);
 	comm->rx_length = 0U;
+	comm->rx_pending = false;
 	comm->tx_sequence = 0U;
 	comm->rx_sequence = 0U;
 	comm->waiting_ack = false;
@@ -160,6 +162,7 @@ static int process_frame(struct mc_comm *comm, const uint8_t *frame, size_t leng
 		payload_length <= comm->config.receive_capacity) {
 		memmove(comm->rx, &frame[MC_HEADER_SIZE], payload_length);
 		comm->rx_length = payload_length;
+		comm->rx_pending = true;
 		comm->rx_sequence++;
 	}
 	return send_frame(comm, MC_TYPE_ACK, sequence, NULL, 0U);
@@ -224,7 +227,7 @@ int mc_comm_receive(struct mc_comm *instance, void *data, size_t capacity,
 		return -EINVAL;
 	}
 	int64_t deadline = k_uptime_get() + DIV_ROUND_UP(timeout_us, 1000U);
-	while (instance->rx_length == 0U) {
+	while (!instance->rx_pending) {
 		(void)mc_comm_update(instance);
 		if (k_uptime_get() >= deadline) {
 			return -ETIMEDOUT;
@@ -237,6 +240,7 @@ int mc_comm_receive(struct mc_comm *instance, void *data, size_t capacity,
 	memcpy(data, instance->rx, instance->rx_length);
 	*length = instance->rx_length;
 	instance->rx_length = 0U;
+	instance->rx_pending = false;
 	return 0;
 }
 
