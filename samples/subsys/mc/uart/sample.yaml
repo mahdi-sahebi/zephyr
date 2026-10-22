@@ -2,7 +2,13 @@ sample:
   name: Micro Core UART loopback
   description: Polling UART loopback for mc_comm and mc_msg
 tests:
-  sample.mc.uart:
+  sample.mc.uart.sender:
     build_only: true
+    extra_args: CONF_FILE=prj_sender.conf
+    platform_allow:
+      - nrf54l15dk/nrf54l15/cpuapp
+  sample.mc.uart.receiver:
+    build_only: true
+    extra_args: CONF_FILE=prj_receiver.conf
     platform_allow:
       - nrf54l15dk/nrf54l15/cpuapp

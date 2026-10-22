@@ -19,9 +19,16 @@
 #error "MC UART sample requires a mc-uart devicetree alias"
 #endif
 
+#define MC_UART_MAGIC_HIGH 0xc7U
+#define MC_UART_MAGIC_LOW 0xe9U
+#define MC_UART_HEADER_SIZE 8U
+#define MC_UART_RX_BUFFER_SIZE 128U
+
 static const struct device *const uart = DEVICE_DT_GET(MC_UART_NODE);
 
 static bool message_received;
+static uint8_t uart_rx_buffer[MC_UART_RX_BUFFER_SIZE];
+static size_t uart_rx_length;
 
 static void on_message(void *context, uint16_t id, const uint8_t *data,
 			       size_t length)
@@ -37,11 +44,39 @@ static void on_message(void *context, uint16_t id, const uint8_t *data,
 static int uart_receive(void *context, uint8_t *data, size_t capacity)
 {
 	ARG_UNUSED(context);
-	size_t count = 0U;
-	while (count < capacity && uart_poll_in(uart, &data[count]) == 0) {
-		count++;
+
+	while (uart_rx_length < sizeof(uart_rx_buffer) &&
+	       uart_poll_in(uart, &uart_rx_buffer[uart_rx_length]) == 0) {
+		uart_rx_length++;
 	}
-	return count == 0U ? -EAGAIN : (int)count;
+
+	while (uart_rx_length >= 2U &&
+	       (uart_rx_buffer[0] != MC_UART_MAGIC_HIGH ||
+		uart_rx_buffer[1] != MC_UART_MAGIC_LOW)) {
+		memmove(uart_rx_buffer, &uart_rx_buffer[1], --uart_rx_length);
+	}
+
+	if (uart_rx_length < MC_UART_HEADER_SIZE) {
+		return -EAGAIN;
+	}
+
+	size_t payload_length = ((size_t)uart_rx_buffer[4] << 8U) |
+		uart_rx_buffer[5];
+	size_t frame_length = MC_UART_HEADER_SIZE + payload_length;
+
+	if (frame_length > capacity || frame_length > sizeof(uart_rx_buffer)) {
+		memmove(uart_rx_buffer, &uart_rx_buffer[1], --uart_rx_length);
+		return -EBADMSG;
+	}
+	if (uart_rx_length < frame_length) {
+		return -EAGAIN;
+	}
+
+	memcpy(data, uart_rx_buffer, frame_length);
+	uart_rx_length -= frame_length;
+	memmove(uart_rx_buffer, &uart_rx_buffer[frame_length], uart_rx_length);
+
+	return (int)frame_length;
 }
 
 static int uart_transmit(void *context, const uint8_t *data, size_t length)

@@ -1,7 +1,12 @@
-/* Use UART30 for the protocol loopback; UART20 remains the console. */
+/* Use UART20/Serial Port 1 for the protocol and UART30/Serial Port 0 as console. */
 / {
 	aliases {
-		mc-uart = &uart30;
+		mc-uart = &uart20;
+	};
+
+	chosen {
+		zephyr,console = &uart30;
+		zephyr,shell-uart = &uart30;
 	};
 };
 
