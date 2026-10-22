@@ -15,16 +15,17 @@ Connect the boards as follows::
    Board A RX <- Board B TX
    Board A GND -- Board B GND
 
-Build the sender with the default configuration::
+Build the sender with the sender configuration::
 
    west build -b nrf54l15dk/nrf54l15/cpuapp \
-     samples/subsys/mc/uart -d build/mc-uart-sender --pristine=always
+     samples/subsys/mc/uart -d build/mc-uart-sender --pristine=always \
+     -- -DCONF_FILE=prj_sender.conf
 
-Build the receiver with ``MC_UART_SENDER`` disabled::
+Build the receiver with the receiver configuration::
 
    west build -b nrf54l15dk/nrf54l15/cpuapp \
      samples/subsys/mc/uart -d build/mc-uart-receiver \
-     --pristine=always -DCONFIG_MC_UART_SENDER=n
+     --pristine=always -- -DCONF_FILE=prj_receiver.conf
 
 Flash each build to its corresponding board with ``west flash``. Open both
 console UARTs at 115200 baud. The sender prints ``MC UART: PASS`` after the
