@@ -10,6 +10,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/ring_buffer.h>
 
 #include <zephyr/mc/msg.h>
 
@@ -23,12 +24,30 @@
 #define MC_UART_MAGIC_LOW 0xe9U
 #define MC_UART_HEADER_SIZE 8U
 #define MC_UART_RX_BUFFER_SIZE 128U
+#define MC_UART_RING_BUFFER_SIZE 256U
 
 static const struct device *const uart = DEVICE_DT_GET(MC_UART_NODE);
 
 static bool message_received;
 static uint8_t uart_rx_buffer[MC_UART_RX_BUFFER_SIZE];
 static size_t uart_rx_length;
+RING_BUF_DECLARE(uart_rx_ring, MC_UART_RING_BUFFER_SIZE);
+
+static void uart_rx_callback(const struct device *dev, void *user_data)
+{
+	uint8_t buffer[32];
+
+	ARG_UNUSED(user_data);
+	uart_irq_update(dev);
+	while (uart_irq_rx_ready(dev)) {
+		int length = uart_fifo_read(dev, buffer, sizeof(buffer));
+
+		if (length <= 0) {
+			break;
+		}
+		(void)ring_buf_put(&uart_rx_ring, buffer, (uint32_t)length);
+	}
+}
 
 static void on_message(void *context, uint16_t id, const uint8_t *data,
 			       size_t length)
@@ -45,9 +64,14 @@ static int uart_receive(void *context, uint8_t *data, size_t capacity)
 {
 	ARG_UNUSED(context);
 
-	while (uart_rx_length < sizeof(uart_rx_buffer) &&
-	       uart_poll_in(uart, &uart_rx_buffer[uart_rx_length]) == 0) {
-		uart_rx_length++;
+	while (uart_rx_length < sizeof(uart_rx_buffer)) {
+		uint32_t received = ring_buf_get(&uart_rx_ring,
+			&uart_rx_buffer[uart_rx_length], 1U);
+
+		if (received == 0U) {
+			break;
+		}
+		uart_rx_length += received;
 	}
 
 	while (uart_rx_length >= 2U &&
@@ -93,6 +117,11 @@ int main(void)
 	if (!device_is_ready(uart)) {
 		return 1;
 	}
+	if (uart_irq_callback_user_data_set(uart, uart_rx_callback, NULL) != 0) {
+		return 1;
+	}
+	uart_irq_rx_enable(uart);
+
 	static uint8_t storage[512] __aligned(8);
 	struct mc_msg *msg;
 	struct mc_msg_config config = {
@@ -130,6 +159,5 @@ int main(void)
 			printk("MC UART: PASS\n");
 			message_received = false;
 		}
-		k_msleep(1U);
 	}
 }

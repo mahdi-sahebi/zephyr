@@ -69,15 +69,33 @@ sudo usermod -aG dialout "$USER"
 
 | Function | Zephyr device | Signals | USB interface |
 |---|---|---|---|
-| `mc_comm` protocol | UART20 / Serial Port 1 | P1.04 TXD1, P1.05 RXD1 | VCOM1; keep closed |
+| `mc_comm` protocol | UART20 / Serial Port 1 | P1.04 TXD1, P1.05 RXD1 | VCOM1; disable it |
 | Console | UART30 / Serial Port 0 | P0.00 TXD0, P0.01 RXD0 | VCOM0 |
 
 Both UARTs use 115200 baud, 8 data bits, no parity, and one stop bit. The
 protocol uses only TX, RX, and GND; RTS/CTS hardware flow control is not used.
 
-Do not open VCOM1 (`/dev/ttyACM1` and `/dev/ttyACM3` in the current mapping)
-during the test. Opening it connects the onboard debugger to P1.04/P1.05 and
-can electrically interfere with the board-to-board protocol.
+### Disable VCOM1 on both board controllers
+
+The onboard debugger's VCOM1 interface is electrically connected to
+P1.04/P1.05. Merely closing `/dev/ttyACM1` and `/dev/ttyACM3` was not
+sufficient on the tested boards: its TX signal corrupted the external UART
+link. Disable VCOM1 persistently on both board controllers before testing.
+The following preserves the other PCA10156 revision 1.0.0 factory settings
+and changes only VCOM1 enable pin 22 to `false`:
+
+```sh
+BOARD_CONFIG='{"operations":[{"operation":{"type":"smp","operation":2,"group_id":64,"command_id":0,"sequence_number":0,"data":[[6,true,9,false,20,false,22,false,23,false,42,true,45,true,47,true],[1,1800]]},"operationId":"1"}]}'
+
+nrfutil device x-execute-batch --serial-number 1057753351 \
+  --batch-json "$BOARD_CONFIG"
+nrfutil device x-execute-batch --serial-number 1057744552 \
+  --batch-json "$BOARD_CONFIG"
+```
+
+Both commands must finish with an SMP write response whose `operation` is
+`3` and whose `data` object is empty. VCOM0 remains enabled for console logs.
+This setting persists across resets and firmware flashes.
 
 ## Wiring
 
@@ -196,10 +214,12 @@ MC UART: PASS
 ## Troubleshooting
 
 - `MC UART: FAIL` means the sender did not receive an acknowledgment. Check
-  crossed TX/RX wiring, common GND, and reset order.
+  that VCOM1 is disabled on both board controllers, then check crossed TX/RX
+  wiring, common GND, and reset order.
 - If the receiver prints only `MC UART receiver ready`, check that P1.04 on
   the sender reaches P1.05 on the receiver.
-- Close all programs using VCOM1. This includes serial monitors in VS Code.
+- Do not open VCOM1 after disabling it. This includes serial monitors in VS
+  Code.
 - Use `nrfutil device list` after reconnecting USB because `/dev/ttyACM*`
   numbers may change.
 - If a build reports undefined Kconfig symbols, ensure the local Zephyr tree

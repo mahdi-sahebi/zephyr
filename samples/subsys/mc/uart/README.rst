@@ -14,7 +14,13 @@ This sample intentionally has no default ``prj.conf``. Select exactly one of
 Do not use the console UART for the protocol link. The board overlay selects
 UART20/Serial Port 1 on P1.04 TXD1 and P1.05 RXD1 for the protocol. It moves
 the console to UART30/Serial Port 0 on P0.00/P0.01, available through VCOM0.
-Do not open VCOM1 while testing because it is connected to the protocol pins.
+VCOM1 must be disabled on both DK board controllers before testing because it
+is electrically connected to the protocol pins and otherwise corrupts the
+external UART link. See ``setup.md`` for the tested ``nrfutil`` commands.
+
+The sample uses interrupt-driven UART reception with a ring buffer. This is
+required because ``mc_comm`` can sleep while waiting for an acknowledgment;
+plain polling can lose a complete short UART frame during that interval.
 
 Connect the boards as follows::
 
