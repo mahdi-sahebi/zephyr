@@ -10,20 +10,22 @@ Connect the boards as follows::
    Board A RX <- Board B TX
    Board A GND -- Board B GND
 
-UART30 is used for the protocol and UART20 remains the console UART. Verify
-the UART30 pin routing on the boards before connecting them.
+UART20 (Serial Port 1) is used for the protocol and UART30 (Serial Port 0)
+remains the console UART. Connect P1.04/TXD1 to the other board's P1.05/RXD1,
+P1.05/RXD1 to the other board's P1.04/TXD1, and connect GND to GND.
 
 Build the sender on Board A::
 
    west build -b nrf54l15dk/nrf54l15/cpuapp \
-     tests/subsys/mc/uart -d build/mc-uart-sender --pristine=always
+     tests/subsys/mc/uart -d build/mc-uart-sender --pristine=always \
+     -- -DCONF_FILE=prj_sender.conf
    west flash -d build/mc-uart-sender
 
 Build the receiver on Board B::
 
    west build -b nrf54l15dk/nrf54l15/cpuapp \
-     tests/subsys/mc/uart -d build/mc-uart-receiver \
-     --pristine=always -DCONFIG_MC_UART_SENDER=n
+     tests/subsys/mc/uart -d build/mc-uart-receiver --pristine=always \
+     -- -DCONF_FILE=prj_receiver.conf
    west flash -d build/mc-uart-receiver
 
 Open both console UARTs at 115200 baud. Both boards should report a PASS

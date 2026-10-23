@@ -1,8 +1,16 @@
-/* Use UART30 for the protocol; UART20 remains the console UART. */
+/* UART20 is the protocol on P1.04/P1.05; UART30 remains the console. */
 / {
 	aliases {
-		mc-uart = &uart30;
+		mc-uart = &uart20;
 	};
+	chosen {
+		zephyr,console = &uart30;
+		zephyr,shell-uart = &uart30;
+	};
+};
+
+&uart20 {
+	status = "okay";
 };
 
 &uart30 {

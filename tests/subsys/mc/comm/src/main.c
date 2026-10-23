@@ -17,6 +17,9 @@ struct test_link {
 	bool full;
 	bool corrupt;
 	bool drop;
+	uint8_t drop_count;
+	uint32_t transmit_count;
+	uint32_t dropped_count;
 	struct mc_comm *peer;
 };
 
@@ -49,11 +52,16 @@ static int transmit(void *context, const uint8_t *data, size_t length)
 	if (link->full || length > sizeof(link->data)) {
 		return -EAGAIN;
 	}
+	link->transmit_count++;
 	memcpy(link->data, data, length);
 	if (link->corrupt && length > 0U) {
 		link->data[length - 1U] ^= 0x01U;
 	}
-	if (link->drop) {
+	if (link->drop || link->drop_count > 0U) {
+		if (link->drop_count > 0U) {
+			link->drop_count--;
+		}
+		link->dropped_count++;
 		return (int)length;
 	}
 	link->length = length;
@@ -192,6 +200,33 @@ ZTEST(mc_comm, test_corrupted_frame_and_bounded_retry)
 	a_to_b.drop = true;
 	zassert_equal(mc_comm_send(a, payload, sizeof(payload), 50000U),
 		      -ETIMEDOUT, NULL);
+}
+
+ZTEST(mc_comm, test_retries_after_deterministic_frame_loss)
+{
+	struct test_link a_to_b = {0};
+	struct test_link b_to_a = {0};
+	struct mc_comm *a;
+	struct mc_comm *b;
+	struct test_endpoint a_endpoint;
+	struct test_endpoint b_endpoint;
+	uint8_t a_storage[256] __aligned(8);
+	uint8_t b_storage[256] __aligned(8);
+	const uint8_t payload[] = "loss-recovery";
+	uint8_t received[sizeof(payload)];
+	size_t received_length = 0U;
+
+	init_pair(&a, &b, &a_to_b, &b_to_a, &a_endpoint, &b_endpoint,
+		  a_storage, b_storage);
+	/* Lose two DATA frames; the third attempt must complete normally. */
+	a_to_b.drop_count = 2U;
+	zassert_ok(mc_comm_send(a, payload, sizeof(payload), 100000U), NULL);
+	zassert_equal(a_to_b.dropped_count, 2U, NULL);
+	zassert_equal(a_to_b.transmit_count, 3U, NULL);
+	zassert_ok(mc_comm_receive(b, received, sizeof(received), &received_length,
+			  100000U), NULL);
+	zassert_equal(received_length, sizeof(payload), NULL);
+	zassert_mem_equal(received, payload, sizeof(payload), NULL);
 }
 
 ZTEST_SUITE(mc_comm, NULL, NULL, NULL, NULL, NULL);
