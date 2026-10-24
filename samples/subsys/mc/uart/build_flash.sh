@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_ZEPHYR_BASE="$(realpath "${SCRIPT_DIR}/../../../..")"
 ZEPHYR_BASE="${ZEPHYR_BASE:-${DEFAULT_ZEPHYR_BASE}}"
 BOARD="nrf54l15dk/nrf54l15/cpuapp"
+MICRO_CORE_ROOT="${MICRO_CORE_ROOT:-}"
 
 # The labels on the probes include leading zeroes. nrfutil reports the same
 # identifiers without them, which is the form used by west's nrfutil runner.
@@ -44,12 +45,18 @@ command -v west >/dev/null 2>&1 || {
 	exit 1
 }
 
+if [ ! -f "${MICRO_CORE_ROOT}/src/io/communication/mc_communication.c" ]; then
+	echo "Set MICRO_CORE_ROOT to the micro_core source directory." >&2
+	exit 1
+fi
+
 west -z "${ZEPHYR_BASE}" build \
 	-b "${BOARD}" \
 	"${SCRIPT_DIR}" \
 	-d "${BUILD_DIR}" \
 	--pristine=always \
-	-- -DCONF_FILE="${CONF_FILE}"
+	-- -DCONF_FILE="${CONF_FILE}" \
+	-DMICRO_CORE_ROOT="${MICRO_CORE_ROOT}"
 
 west -z "${ZEPHYR_BASE}" flash \
 	-d "${BUILD_DIR}" \

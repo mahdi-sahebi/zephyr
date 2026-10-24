@@ -1,8 +1,10 @@
 # nRF54L15 DK two-board UART setup
 
-This guide builds and runs the `mc_comm`/`mc_msg` UART sample on two
-nRF54L15 DKs. UART Port 1 carries protocol data between the boards, while
-UART Port 0 remains available for console output on both boards.
+This guide builds and runs the original `micro_core` communication tests over
+UART on two nRF54L15 DKs. UART Port 1 carries protocol data between the boards,
+while UART Port 0 remains available for console output on both boards. The
+sample links the external `micro_core` communication sources, not Zephyr's
+`CONFIG_MC_COMM` or `CONFIG_MC_MSG` implementation.
 
 ## Working directory
 
@@ -34,11 +36,22 @@ automatically.
 
 | Role | Probe label | ID reported by `nrfutil` | Console |
 |---|---:|---:|---|
-| Sender | `001057753351` | `1057753351` | VCOM0, currently `/dev/ttyACM2` |
-| Receiver | `001057744552` | `1057744552` | VCOM0, currently `/dev/ttyACM0` |
+| Sender | `001057753351` | `1057753351` | VCOM0; look up the current port |
+| Receiver | `001057744552` | `1057744552` | VCOM0; look up the current port |
 
 Linux device names can change after reconnecting USB. Run
 `nrfutil device list` and use the `vcom: 0` entry for each board's console.
+
+Set `MICRO_CORE_ROOT` to a checkout of the MIT-licensed `micro_core` source
+that contains `src/io/communication/mc_communication.c`. On the tested host:
+
+```sh
+export MICRO_CORE_ROOT=/home/mahdi/workstation/micro_core
+```
+
+The original host reference is
+`$MICRO_CORE_ROOT/test/io/communication/udp/test.c`. The UART port in this
+sample retains its case names, payload generators, validation, and fault rates.
 
 ## Required software
 
@@ -69,11 +82,15 @@ sudo usermod -aG dialout "$USER"
 
 | Function | Zephyr device | Signals | USB interface |
 |---|---|---|---|
-| `mc_comm` protocol | UART20 / Serial Port 1 | P1.04 TXD1, P1.05 RXD1 | VCOM1; disable it |
+| `micro_core` protocol | UART20 / Serial Port 1 | P1.04 TXD1, P1.05 RXD1 | VCOM1; disable it |
 | Console | UART30 / Serial Port 0 | P0.00 TXD0, P0.01 RXD0 | VCOM0 |
 
-Both UARTs use 115200 baud, 8 data bits, no parity, and one stop bit. The
+The protocol UART uses 1000000 baud and the console uses 115200 baud. Both use
+8 data bits, no parity, and one stop bit. The
 protocol uses only TX, RX, and GND; RTS/CTS hardware flow control is not used.
+UART frames use escaped 0xC0 boundaries so the receiver can discard a partial
+frame and resynchronize at the next one. The fault simulator still corrupts or
+drops the decoded `micro_core` windows.
 
 ### Disable VCOM1 on both board controllers
 
@@ -125,13 +142,13 @@ chmod +x build_flash.sh
 Build and flash the receiver first:
 
 ```sh
-./build_flash.sh receiver
+MICRO_CORE_ROOT=/home/mahdi/workstation/micro_core ./build_flash.sh receiver
 ```
 
 Build and flash the sender second:
 
 ```sh
-./build_flash.sh sender
+MICRO_CORE_ROOT=/home/mahdi/workstation/micro_core ./build_flash.sh sender
 ```
 
 The script uses these role assignments by default:
@@ -163,7 +180,7 @@ Receiver:
 west -z /run/media/mahdi/Storage/repositories/rasna/mc_message/zephyr \
   build -b nrf54l15dk/nrf54l15/cpuapp \
   . -d build_receiver --pristine=always \
-  -- -DCONF_FILE=prj_receiver.conf
+  -- -DCONF_FILE=prj_receiver.conf -DMICRO_CORE_ROOT="$MICRO_CORE_ROOT"
 
 west flash -d build_receiver --dev-id 1057744552
 ```
@@ -173,51 +190,98 @@ Sender:
 ```sh
 west -z /run/media/mahdi/Storage/repositories/rasna/mc_message/zephyr \
   build -b nrf54l15dk/nrf54l15/cpuapp \
-  . -d build_sender --pristine=always \
-  -- -DCONF_FILE=prj_sender.conf
+  . -d build_sender_new --pristine=always \
+  -- -DCONF_FILE=prj_sender.conf -DMICRO_CORE_ROOT="$MICRO_CORE_ROOT"
 
-west flash -d build_sender --dev-id 1057753351
+west flash -d build_sender_new --dev-id 1057753351
 ```
 
 ## Run the test
 
-Open only VCOM0. With the current device mapping, use two terminals:
+Run `nrfutil device list` and identify each board's `vcom: 0` port from its
+serial number. Sender is `1057753351`; receiver is `1057744552`. The
+`/dev/ttyACM*` names can change after flashing or reconnecting. Close other
+serial monitors, then capture each VCOM0 from separate terminals:
 
 ```sh
-picocom -b 115200 /dev/ttyACM0  # receiver console
+RECEIVER_VCOM0=/dev/ttyACM0  # replace with receiver's current VCOM0
+stty -F "$RECEIVER_VCOM0" 115200 raw -echo
+timeout 1800 cat "$RECEIVER_VCOM0" | tee receiver.log
 ```
 
 ```sh
-picocom -b 115200 /dev/ttyACM2  # sender console
+SENDER_VCOM0=/dev/ttyACM2  # replace with sender's current VCOM0
+stty -F "$SENDER_VCOM0" 115200 raw -echo
+timeout 1800 cat "$SENDER_VCOM0" | tee sender.log
 ```
 
-Reset the receiver first, then reset the sender. The sender waits one second
-before transmitting.
+Start both captures before resetting the receiver, then reset the sender.
+The high-loss phase can take several minutes. Elapsed microseconds and the
+frame counters vary between runs; the case order and format should not.
+Each completed communication case prints progress at 0%, 5%, 10%, ..., 100%.
+The high-loss case may stop earlier when its allowed timeout is reached.
 
-Expected receiver output:
+The sender and receiver both print:
 
 ```text
 *** Booting Zephyr OS build ... ***
-MC UART receiver ready
-MC UART: message received
-MC UART: PASS
+[MICRO CORE 1.0.0 - IO - COMMUNICATION] Sender
+[invalid_creation]
+PASSED - <elapsed>(us)
+
+[invalid_argument]
+PASSED - <elapsed>(us)
+
+[valid_creation]
+PASSED - <elapsed>(us)
+
+[singly_direction]
+PASSED - <elapsed>(us)
+
+[singly_repetitive]
+PASSED - <elapsed>(us)
+
+[singly_low_lossy]
+PASSED - <elapsed>(us)
+
+[singly_high_lossy]
+PASSED - <elapsed>(us)
+
+[singly_timed_out]
+PASSED - <elapsed>(us)
+
+MC UART communication test PASS
 ```
 
-Expected sender output:
+Both boards additionally print a plain-ASCII progress bar on every transfer
+iteration and, before each
+transport case result, a line like:
 
 ```text
-*** Booting Zephyr OS build ... ***
-MC UART sender ready
-MC UART: PASS
+Sender Progress: [##########----------] 50%
+Receiving Progress: [##########----------] 50%
 ```
+
+```text
+[IO] Completed{Recv: 966, Send: 952} - Failed{Recv: 0(0.00%), Send: 0(0.00%)} - Throughput: 1028.57 KBps
+```
+
+`singly_direction` transfers 201 sets of a nine-byte string, a variable-size
+array of 27–1023 32-bit words, and a one-byte value. `singly_repetitive`
+duplicates every transport frame. `singly_low_lossy` applies a 20% fault rate
+and 100 ms periodic link changes; `singly_high_lossy` uses 96% and five-second
+changes. Faults alternate between drops and bit flips; every 31st receive
+fault corrupts the header and shortens the logical frame to 74%. The final
+case checks send, receive, and flush timeouts. Its faults are local, matching
+the original UDP test, not injected into the physical link.
 
 ## Troubleshooting
 
-- `MC UART: FAIL` means the sender did not receive an acknowledgment. Check
+- `MC UART communication test FAIL` means a case failed or timed out. Check
   that VCOM1 is disabled on both board controllers, then check crossed TX/RX
   wiring, common GND, and reset order.
-- If the receiver prints only `MC UART receiver ready`, check that P1.04 on
-  the sender reaches P1.05 on the receiver.
+- If the receiver fails `singly_direction`, check that P1.04 on the sender
+  reaches P1.05 on the receiver and that both UARTs share ground.
 - Do not open VCOM1 after disabling it. This includes serial monitors in VS
   Code.
 - Use `nrfutil device list` after reconnecting USB because `/dev/ttyACM*`

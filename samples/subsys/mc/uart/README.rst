@@ -1,46 +1,18 @@
-MC UART transport
-=================
+MC UART communication test
+==========================
 
-This sample exercises ``mc_comm`` and ``mc_msg`` over a physical UART between
-two nRF54L15 DKs. It sends a message and a zero-payload signal, then reports
-``MC UART: PASS``.
+This two-board sample runs the ``micro_core`` UDP communication test cases
+over UART20 instead of UDP sockets. It builds the communication implementation
+from a separate ``micro_core`` checkout, selected by ``MICRO_CORE_ROOT``.
+It does not exercise Zephyr's ``CONFIG_MC_COMM`` or ``CONFIG_MC_MSG`` APIs.
 
-See ``setup.md`` for the complete two-board setup, assigned probe IDs, wiring,
-build/flash helper, console mapping, and troubleshooting procedure.
+Both roles print the original test case names and elapsed times. Each board
+also prints its own role-labelled ASCII progress bar on every transfer iteration,
+completed and failed frame counters, loss
+percentages, and throughput. Transport fault injection includes duplicated
+frames, packet drops, bit flips, malformed headers, shortened logical frames,
+and periodic disconnections. The 20% and 96% lossy phases use the same rates
+as the UDP test; actual measured percentages vary.
 
-This sample intentionally has no default ``prj.conf``. Select exactly one of
-``prj_sender.conf`` or ``prj_receiver.conf`` explicitly for every build.
-
-Do not use the console UART for the protocol link. The board overlay selects
-UART20/Serial Port 1 on P1.04 TXD1 and P1.05 RXD1 for the protocol. It moves
-the console to UART30/Serial Port 0 on P0.00/P0.01, available through VCOM0.
-VCOM1 must be disabled on both DK board controllers before testing because it
-is electrically connected to the protocol pins and otherwise corrupts the
-external UART link. See ``setup.md`` for the tested ``nrfutil`` commands.
-
-The sample uses interrupt-driven UART reception with a ring buffer. This is
-required because ``mc_comm`` can sleep while waiting for an acknowledgment;
-plain polling can lose a complete short UART frame during that interval.
-
-Connect the boards as follows::
-
-   Board A P1.04 TXD1 -> Board B P1.05 RXD1
-   Board A P1.05 RXD1 <- Board B P1.04 TXD1
-   Board A GND -- Board B GND
-
-Build the sender with the sender configuration::
-
-   west build -b nrf54l15dk/nrf54l15/cpuapp \
-     samples/subsys/mc/uart -d build/mc-uart-sender --pristine=always \
-     -- -DCONF_FILE=prj_sender.conf
-
-Build the receiver with the receiver configuration::
-
-   west build -b nrf54l15dk/nrf54l15/cpuapp \
-     samples/subsys/mc/uart -d build/mc-uart-receiver \
-     --pristine=always -- -DCONF_FILE=prj_receiver.conf
-
-Flash each build to its corresponding board with ``west flash``. Open both
-console UARTs at 115200 baud. The sender prints ``MC UART: PASS`` after the
-message and signal are transmitted; the receiver prints it after receiving
-the message.
+See ``setup.md`` for the source checkout requirement, board mapping, wiring,
+build and flash commands, console capture, and expected output.
