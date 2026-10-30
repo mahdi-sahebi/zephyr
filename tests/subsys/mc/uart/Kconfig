@@ -1,0 +1,12 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "MC UART integration test"
+
+source "Kconfig.zephyr"
+
+config MC_UART_SENDER
+	bool "MC UART sender"
+	help
+	  Configure this board to initiate the UART integration test. Disable
+	  this option on the peer board to configure it as the receiver.
