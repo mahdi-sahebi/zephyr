@@ -13,17 +13,27 @@ numbers, acknowledgments, and bounded retransmission. :kconfig:option:`CONFIG_MC
 or another frame-oriented link. Its callbacks must read and write one complete frame or return
 a negative error code.
 
+:kconfig:option:`CONFIG_MC_POOL` provides an independent, fixed-size memory pool. It reserves
+items without copying or initializing their contents. A pool has one item size, capacity, and
+power-of-two alignment chosen at initialization. :c:func:`mc_pool_add` and
+:c:func:`mc_pool_remove` take constant time; :c:func:`mc_pool_clear` returns all items in
+constant time without erasing their contents. The caller owns the storage and must serialize
+access to a pool. A removed or cleared pointer is invalid; after its slot is reused, the pool
+cannot distinguish that stale pointer from the new item's pointer.
+
 Memory ownership
 ****************
 
 All **persistent instance state and internal buffers** are embedded in the caller-provided
 storage. This includes the communication and message objects, transmit and receive windows,
-reassembly space, message space, and subscription table. The subsystem does not call a heap
-allocator. Query :c:func:`mc_comm_req_size` or :c:func:`mc_msg_req_size` after filling the
-configuration, then provide at least that many bytes aligned to 8 bytes. The storage must remain
-valid and exclusive to the instance until the application stops using it. The size functions
-return zero for invalid configurations; initialization rejects insufficient or misaligned
-storage. The message size includes its embedded communication instance.
+reassembly space, message space, subscription table, and pool slots. The subsystem does not
+call a heap allocator. Query :c:func:`mc_comm_req_size`, :c:func:`mc_msg_req_size`, or
+:c:func:`mc_pool_req_size` after filling the configuration, then provide at least that many
+bytes. Align communication and message storage to 8 bytes; align pool storage to the greater
+of 8 bytes and the configured item alignment. Storage must remain valid and exclusive to the
+instance until the application stops using it. The size functions return zero for invalid
+configurations; initialization rejects insufficient or misaligned storage. The message size
+includes its embedded communication instance.
 
 Temporary local variables, including a small acknowledgment frame, use the thread stack. The
 application also owns transport callback context, input and output buffers, and any memory used
@@ -185,6 +195,18 @@ These results use the host GNU toolchain and the three listed Twister scenarios.
 coverage target is at least 97% for each file. The branch rates are reported separately and
 are not MC/DC coverage. The build output contains the full XML and text reports; other target
 boards and test selections require separate measurements.
+
+Run the pool suite on ``native_sim/native/64``, ``qemu_x86/atom``, and
+``qemu_x86_64/atom`` with ``west twister -p <platform> -s mc.pool -i``. To check
+100% line and branch coverage for the new pool source, run::
+
+   ZEPHYR_BASE=$PWD ZEPHYR_TOOLCHAIN_VARIANT=host west twister \
+     -p native_sim/native/64 -s mc.pool \
+     --coverage --coverage-tool gcovr --coverage-formats xml,txt -i \
+     --outdir ../build/mc-pool-coverage
+   python3 tests/subsys/mc/coverage_report.py \
+     ../build/mc-pool-coverage/coverage/coverage.xml \
+     --source subsys/micro_core/pool.c --min-line-percent 100 --min-branch-percent 100
 
 The uncovered communication line is a defensive check against an already-full reassembly
 state. The uncovered message line propagates a nested initialization error after the

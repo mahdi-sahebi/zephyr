@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig MC
-	bool "Micro Core communication services"
+	bool "Micro Core services"
 	default n
 	help
-	  Enable the experimental, heap-free Micro Core communication services.
+	  Enable the experimental, heap-free Micro Core services.
 
 if MC
 
@@ -24,5 +24,11 @@ config MC_MSG
 	help
 	  Enable message IDs, subscriptions, and zero-length signals on top of
 	  MC_COMM.
+
+config MC_POOL
+	bool "Fixed-size memory pool"
+	help
+	  Enable a caller-owned pool with constant-time allocation, removal,
+	  and clearing of fixed-size items.
 
 endif

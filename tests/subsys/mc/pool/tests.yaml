@@ -1,0 +1,8 @@
+tests:
+  mc.pool:
+    tags:
+      - mc
+    platform_allow:
+      - native_sim/native/64
+      - qemu_x86/atom
+      - qemu_x86_64/atom
